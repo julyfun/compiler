@@ -24,4 +24,3 @@ pub struct Block {
 pub struct Stmt {
     pub num: i32,
 }
-
