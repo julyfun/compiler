@@ -5,7 +5,7 @@ use koopa::ir::builder::{
     BasicBlockBuilder, BlockBuilder, LocalBuilder, LocalInstBuilder, ValueBuilder,
 };
 use koopa::ir::{BasicBlock, BinaryOp, Function, FunctionData, Program, Type, Value};
-use lalrpop_util::lalrpop_mod;
+use lalrpop_util::{ParseError, lalrpop_mod, lexer};
 use std::env::args;
 use std::error::Error;
 use std::fmt::{self, Display};
@@ -52,7 +52,7 @@ fn try_main() -> Result<(), CompErr> {
     let code = read_to_string(&input).map_err(CompErr::Io)?;
     let ast = sysy::CompUnitParser::new()
         .parse(&code)
-        .map_err(|_| CompErr::Wtf)?;
+        .map_err(|e| CompErr::ParseError(format!("{:?}", e)))?;
     eprintln!("{:?}", ast);
 
     let program = ast_to_mem(&ast)?;
@@ -81,6 +81,7 @@ enum CompErr {
     Cli(String),
     Io(io::Error),
     NoMain,
+    ParseError(String),
     Wtf,
 }
 

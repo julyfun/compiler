@@ -8,6 +8,8 @@ match {
   // 跳过空白符和注释
   r"\s*" => {},
   r"//[^\n\r]*[\n\r]*" => {},
+  // inline comment
+  r"/\*[^(\*/)]*\*/" => {},
   // 剩下的情况采用默认方式处理
   _
 }
@@ -39,4 +41,3 @@ IntConst: i32 = {
   r"0[0-7]*" => i32::from_str_radix(<>, 8).unwrap(),
   r"0[xX][0-9a-fA-F]+" => i32::from_str_radix(&<>[2..], 16).unwrap(),
 }
-
