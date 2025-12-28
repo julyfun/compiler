@@ -3,3 +3,5 @@ hello.o
 hello
 *.koopa
 compiler-pku.md
+*.s
+*.riscv

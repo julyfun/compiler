@@ -1,5 +1,8 @@
+#![allow(unused_imports)]
 mod ast;
+mod backend;
 
+use backend::GenerateAsm;
 use koopa::back::{KoopaGenerator, LlvmGenerator};
 use koopa::ir::builder::{
     BasicBlockBuilder, BlockBuilder, LocalBuilder, LocalInstBuilder, ValueBuilder,
@@ -45,7 +48,7 @@ macro_rules! add_inst {
 
 fn try_main() -> Result<(), CompErr> {
     let CliArgs {
-        mode: _,
+        mode,
         input,
         output,
     } = parse_args()?;
@@ -55,13 +58,31 @@ fn try_main() -> Result<(), CompErr> {
         .map_err(|e| CompErr::ParseError(format!("{:?}", e)))?;
     eprintln!("{:?}", ast);
 
-    let program = ast_to_mem(&ast)?;
-    mem_to_ir(&program, File::create(output).map_err(CompErr::Io)?, false)
+    let program = ast_to_ir(&ast)?;
+    if mode == "-koopa" {
+        eprintln!("Emit koopa");
+        emit_ir(&program, File::create(output).map_err(CompErr::Io)?, false)
+    } else if mode == "-riscv" {
+        eprintln!("Emit riscv");
+        emit_riscv(&program, File::create(output).map_err(CompErr::Io)?)
+    } else {
+        Err(CompErr::Cli(format!("invalid mode: {}", mode)))
+    }
 }
 
-fn ast_to_mem(ast: &ast::CompUnit) -> Result<Program, CompErr> {
+fn emit_riscv<T: Write>(program: &Program, mut out: T) -> Result<(), CompErr> {
+    program.generate(&mut out)
+}
+
+fn ast_to_ir(ast: &ast::CompUnit) -> Result<Program, CompErr> {
     if ast.func_def.ident != "main" {
         return Err(CompErr::NoMain);
+    }
+    if !matches!(ast.func_def.func_type, ast::FuncType::Int) {
+        return Err(CompErr::Unimplemented(format!(
+            "function type: {:?}",
+            ast.func_def.func_type
+        )));
     }
     let mut program = Program::new();
     let main_data = FunctionData::new("@main".into(), Vec::new(), Type::get_i32());
@@ -82,19 +103,25 @@ enum CompErr {
     Io(io::Error),
     NoMain,
     ParseError(String),
-    Wtf,
+    Unimplemented(String),
 }
 
 impl Error for CompErr {}
 impl Display for CompErr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "something")
+        match self {
+            CompErr::Cli(s) => write!(f, "{}", s),
+            CompErr::Io(e) => write!(f, "{}", e),
+            CompErr::NoMain => write!(f, "no main function"),
+            CompErr::ParseError(s) => write!(f, "{}", s),
+            CompErr::Unimplemented(s) => write!(f, "{}", s),
+        }
     }
 }
 
 #[derive(Default)]
 struct CliArgs {
-    mode: String,
+    mode: String, // koopa or riscv
     input: String,
     output: String,
 }
@@ -113,7 +140,8 @@ fn parse_args() -> Result<CliArgs, CompErr> {
     })
 }
 
-fn mem_to_ir<T: Write>(program: &Program, out: T, llvm: bool) -> Result<(), CompErr> {
+/// IR to file
+fn emit_ir<T: Write>(program: &Program, out: T, llvm: bool) -> Result<(), CompErr> {
     if llvm {
         LlvmGenerator::new(out).generate_on(program)
     } else {
@@ -122,9 +150,9 @@ fn mem_to_ir<T: Write>(program: &Program, out: T, llvm: bool) -> Result<(), Comp
     .map_err(CompErr::Io)
 }
 
-struct Env<'a> {
-    main: &'a mut FunctionData,
-}
+// struct Env<'a> {
+//     main: &'a mut FunctionData,
+// }
 
 // fn build_program<T>(input: T) -> Result<Program, CompErr>
 // where
